@@ -1,0 +1,40 @@
+name: NPM Generic Build
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: true
+        type: string
+      build-command:
+        required: false
+        type: string
+        default: "pnpm build"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Habilitar corepack (pnpm)
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: ${{ inputs.build-command }}
+
+      - name: Subir build como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: build/
