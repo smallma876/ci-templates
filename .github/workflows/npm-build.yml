@@ -13,28 +13,46 @@ on:
 
 jobs:
   build:
+    # Máquina virtual donde corre el job: una VM efímera de GitHub con
+    # Ubuntu, se crea desde cero para esta corrida y se destruye al terminar.
+    # Cada job tiene la suya propia (por eso el "docker" job necesita
+    # bajar el artifact: no comparte disco con este).
     runs-on: ubuntu-latest
     steps:
+      # Trae el código del repo que llamó a este workflow reusable.
       - name: Checkout
         uses: actions/checkout@v4
 
+      # corepack viene con Node y activa el shim de pnpm; sin esto
+      # el comando "pnpm" no existe en el runner.
       - name: Habilitar corepack (pnpm)
         run: corepack enable
 
+      # Instala la versión de Node pedida por el caller (inputs.node-version)
+      # y cachea el store de pnpm entre corridas para acelerar el install.
+      # Va después de corepack porque necesita pnpm ya disponible para
+      # resolver el lockfile y armar la cache.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: pnpm
 
+      # --frozen-lockfile: falla si el lockfile no coincide con
+      # package.json, en vez de regenerarlo silenciosamente en CI.
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
+      # Corre el build. inputs.build-command es "pnpm build" por defecto,
+      # pero el caller puede pisarlo si necesita otro comando.
       - name: Build
         run: ${{ inputs.build-command }}
 
+      # Deja el resultado (carpeta build/) disponible como artifact,
+      # para que otro job del mismo run (ej. el de Docker) pueda bajarlo.
       - name: Subir build como artifact
         uses: actions/upload-artifact@v4
         with:
           name: build
           path: build/
+          include-hidden-files: true

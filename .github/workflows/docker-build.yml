@@ -9,20 +9,33 @@ on:
 
 jobs:
   docker:
+    # VM efímera propia de este job: no comparte disco con el job "build"
+    # de npm-build.yml, por eso el paso de abajo baja el artifact.
     runs-on: ubuntu-latest
+    # Techo de permisos que este job pide sobre el GITHUB_TOKEN automático.
+    # packages: write es obligatorio para poder publicar en GHCR; sin esto
+    # el push falla con "installation not allowed to Write organization package"
+    # (fue justo el error que vimos: el caller no levantaba este techo).
     permissions:
       contents: read
       packages: write
     steps:
+      # Trae Dockerfile, nginx.conf y demás archivos del repo que llamó
+      # a este workflow (necesarios como contexto para el docker build).
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Recupera el artifact "build" que subió npm-build.yml en el job
+      # anterior del mismo run, y lo deja en ./build — la misma ruta
+      # que el Dockerfile espera en su "COPY build ...".
       - name: Descargar build generado
         uses: actions/download-artifact@v4
         with:
           name: build
           path: build
-      
+
+      # Autentica contra GitHub Container Registry usando el propio
+      # GITHUB_TOKEN del run (no hace falta crear ni guardar credenciales).
       - name: Login GHCR
         uses: docker/login-action@v3
         with:
@@ -30,6 +43,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Arma la imagen con el Dockerfile de la raíz del repo (context: .)
+      # y la publica en GHCR con dos tags: "latest" (siempre la última) y
+      # el SHA del commit (para poder identificar/rollbackear a una build
+      # exacta más adelante).
       - name: Build & Push imagen
         uses: docker/build-push-action@v5
         with:
